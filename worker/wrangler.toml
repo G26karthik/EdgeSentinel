@@ -1,0 +1,33 @@
+name = "edgesentinel"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "645e57a9faf3401b92e473eafa32be13"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "edgesentinel-logs"
+database_id = "191ac5d6-f3bf-441f-b6a3-9c412059eaa5"
+
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "edgesentinel-fingerprints"
+
+[durable_objects]
+bindings = [
+  { name = "RATE_LIMITER", class_name = "RateLimiter" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RateLimiter"]
+
+[vars]
+BOT_SCORE_THRESHOLD = "0.7"
+RATE_LIMIT_RPM = "60"
+AI_GATEWAY_ENDPOINT = "https://gateway.ai.cloudflare.com/v1/552b57d51d77565486e54eb2dd87ae14/edgesentinel-gateway"

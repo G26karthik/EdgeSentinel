@@ -8,46 +8,42 @@ Built entirely on the Cloudflare Developer Platform. Zero external infrastructur
 
 ## Architecture
 
-```
-Incoming Request
-      │
-      ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Cloudflare Worker                                │
-│                                                                     │
-│  1. Extract signals (IP, UA, headers, path, TLS, country)           │
-│                                                                     │
-│  2. Durable Object → atomic per-IP rate counter (no race conds)     │
-│                                                                     │
-│  3. KV Lookup → cached IP reputation                                │
-│     HIT → return cached classification immediately                  │
-│                                                                     │
-│  4. Vectorize → behavioral fingerprint similarity search            │
-│     Match >0.92 against known BOT vectors → classify as BOT         │
-│                                                                     │
-│  5. Heuristic scoring (rule-based, deterministic)                   │
-│     Score ≥70 → BOT, skip LLM entirely                             │
-│                                                                     │
-│  6. Workers AI (Llama 4 Scout 17B) via AI Gateway                   │
-│     Structured prompt → JSON classification                         │
-│                                                                     │
-│  7. Low confidence (0.4–0.6)? → OpenAI GPT-4o fallback             │
-│                                                                     │
-│  8. Async: cache to KV, log to D1, upsert to Vectorize             │
-│                                                                     │
-│  9. Decision: LEGITIMATE → pass | SUSPICIOUS → warn | BOT → 403    │
-│                                                                     │
-│  Response headers: X-EdgeSentinel-Score / Class / Source            │
-└─────────────────────────────────────────────────────────────────────┘
-      │
-      ▼
-  Origin / 403 Response
-      │
-      ▼
-┌─────────────────────┐
-│  D1 Analytics       │  ←  Pages Dashboard polls via /analytics
-│  Cloudflare Pages   │
-└─────────────────────┘
+```mermaid
+flowchart TD
+    A[Incoming HTTP Request] --> B[Signal Extraction]
+    B --> |IP, UA, headers, path, TLS, country| C[Durable Object: Rate Limiter]
+    C --> |atomic per-IP counter| D{KV: IP Reputation Cache}
+
+    D --> |HIT| E[Return Cached Classification]
+    E --> K
+
+    D --> |MISS| F{Vectorize: Behavioral Fingerprint}
+    F --> |similarity > 0.92 to known BOT| G[Classify as BOT via VECTOR]
+    G --> K
+
+    F --> |no match| H{Heuristic Scorer}
+    H --> |score >= 70| I[Classify as BOT via HEURISTIC]
+    I --> K
+
+    H --> |score < 70| J[Workers AI: Llama 4 Scout 17B]
+    J --> |via AI Gateway| L{Confidence Check}
+
+    L --> |score 0.4 - 0.6| M[OpenAI GPT-4o Fallback]
+    M --> N[Final Classification]
+    L --> |decisive score| N
+
+    N --> K[Decision Engine]
+
+    K --> |LEGITIMATE| O[Pass + X-EdgeSentinel headers]
+    K --> |SUSPICIOUS| P[Pass + Warning header]
+    K --> |BOT| Q[403 Forbidden]
+
+    N -.-> |async ctx.waitUntil| R[KV: Cache Reputation]
+    N -.-> |async| S[D1: Log Request]
+    N -.-> |async| T[Vectorize: Upsert Embedding]
+
+    S -.-> U[Pages Dashboard]
+    U --> |polls /analytics every 5s| S
 ```
 
 ---
